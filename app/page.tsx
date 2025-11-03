@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 
-const WORDPRESS_API_URL = 'https://ish-vara.com/wp-json/wp/v2'
+// Use Next.js API proxy to avoid CORS issues
+// This calls /api/wp/* which proxies to WordPress (server-side)
+const WORDPRESS_API_URL = '/api/wp'
 
 // Configure your category here:
 // Option 1: Use category ID (number) - e.g., 5
@@ -22,32 +24,74 @@ interface Post {
   categories: number[]
 }
 
+interface Category {
+  id: number
+  name: string
+  slug: string
+}
+
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([])
+  const [categoryId, setCategoryId] = useState<number | null>(null)
 
   useEffect(() => {
     async function fetchPosts() {
       try {
+        // First, fetch all categories to help with debugging
+        const allCategoriesResponse = await fetch(`${WORDPRESS_API_URL}/categories`)
+        if (allCategoriesResponse.ok) {
+          const allCategories = await allCategoriesResponse.json()
+          setAvailableCategories(allCategories)
+        }
+        
         // Build API URL with category filter
         let apiUrl = `${WORDPRESS_API_URL}/posts?per_page=10`
+        let foundCategoryId: number | null = null
         
         if (CATEGORY_FILTER !== null && CATEGORY_FILTER !== undefined) {
           // Use category ID if it's a number, or slug if it's a string
           if (typeof CATEGORY_FILTER === 'number') {
+            foundCategoryId = CATEGORY_FILTER
             apiUrl += `&categories=${CATEGORY_FILTER}`
           } else {
-            // First, get category ID from slug
+            // Try to find category by slug (case-insensitive)
             const categoryResponse = await fetch(
-              `${WORDPRESS_API_URL}/categories?slug=${CATEGORY_FILTER}`
+              `${WORDPRESS_API_URL}/categories?slug=${encodeURIComponent(CATEGORY_FILTER)}`
             )
+            
+            if (!categoryResponse.ok) {
+              throw new Error(`Failed to fetch categories: ${categoryResponse.status}`)
+            }
+            
             const categoryData = await categoryResponse.json()
             
             if (categoryData.length > 0) {
-              apiUrl += `&categories=${categoryData[0].id}`
+              foundCategoryId = categoryData[0].id
+              apiUrl += `&categories=${foundCategoryId}`
+              setCategoryId(foundCategoryId)
             } else {
-              throw new Error(`Category "${CATEGORY_FILTER}" not found`)
+              // Try case-insensitive search by fetching all and filtering
+              const allCatsResponse = await fetch(`${WORDPRESS_API_URL}/categories`)
+              if (allCatsResponse.ok) {
+                const allCats = await allCatsResponse.json()
+                const matchingCat = allCats.find((cat: Category) => 
+                  cat.slug.toLowerCase() === CATEGORY_FILTER.toLowerCase()
+                )
+                if (matchingCat) {
+                  foundCategoryId = matchingCat.id
+                  apiUrl += `&categories=${foundCategoryId}`
+                  setCategoryId(foundCategoryId)
+                } else {
+                  throw new Error(
+                    `Category "${CATEGORY_FILTER}" not found. Available categories: ${allCats.map((c: Category) => `"${c.slug}" (${c.name})`).join(', ')}`
+                  )
+                }
+              } else {
+                throw new Error(`Category "${CATEGORY_FILTER}" not found`)
+              }
             }
           }
         }
@@ -110,7 +154,7 @@ export default function Home() {
           border: '1px solid #e9ecef'
         }}>
           <div style={{ marginBottom: '0.5rem' }}>
-            <strong>API Endpoint:</strong> {WORDPRESS_API_URL}
+            <strong>API Endpoint:</strong> {WORDPRESS_API_URL} (proxying to ish-vara.com)
           </div>
           <div>
             <strong>Filtering by Category:</strong>{' '}
@@ -118,6 +162,11 @@ export default function Home() {
               ? <span style={{ color: '#667eea', fontWeight: '600' }}>"{CATEGORY_FILTER}"</span>
               : <span style={{ color: '#999' }}>All posts</span>
             }
+            {categoryId && (
+              <span style={{ marginLeft: '0.5rem', color: '#999', fontSize: '0.9rem' }}>
+                (ID: {categoryId})
+              </span>
+            )}
           </div>
         </div>
 
@@ -137,8 +186,23 @@ export default function Home() {
             marginBottom: '2rem'
           }}>
             <strong>Error:</strong> {error}
+            {availableCategories.length > 0 && (
+              <div style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
+                <strong>Available Categories:</strong>
+                <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                  {availableCategories.map((cat) => (
+                    <li key={cat.id}>
+                      <strong>"{cat.slug}"</strong> (ID: {cat.id}, Name: {cat.name})
+                      {cat.slug.toLowerCase() === CATEGORY_FILTER?.toString().toLowerCase() && (
+                        <span style={{ color: '#667eea', marginLeft: '0.5rem' }}>← This matches!</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-              This might be a CORS issue. Check if WordPress allows requests from this domain.
+              💡 Try using the category ID or exact slug from the list above, or set CATEGORY_FILTER to null to show all posts.
             </p>
           </div>
         )}
