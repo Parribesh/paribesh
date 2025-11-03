@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 
 const WORDPRESS_API_URL = 'https://ish-vara.com/wp-json/wp/v2'
 
+// Configure your category here:
+// Option 1: Use category ID (number) - e.g., 5
+// Option 2: Use category slug (string) - e.g., 'paribesh'
+// Set to null or undefined to fetch all posts
+const CATEGORY_FILTER: number | string | null = 'paribesh' // Change this to your category
+
 interface Post {
   id: number
   title: {
@@ -13,6 +19,7 @@ interface Post {
     rendered: string
   }
   link: string
+  categories: number[]
 }
 
 export default function Home() {
@@ -23,7 +30,29 @@ export default function Home() {
   useEffect(() => {
     async function fetchPosts() {
       try {
-        const response = await fetch(`${WORDPRESS_API_URL}/posts?per_page=5`)
+        // Build API URL with category filter
+        let apiUrl = `${WORDPRESS_API_URL}/posts?per_page=10`
+        
+        if (CATEGORY_FILTER !== null && CATEGORY_FILTER !== undefined) {
+          // Use category ID if it's a number, or slug if it's a string
+          if (typeof CATEGORY_FILTER === 'number') {
+            apiUrl += `&categories=${CATEGORY_FILTER}`
+          } else {
+            // First, get category ID from slug
+            const categoryResponse = await fetch(
+              `${WORDPRESS_API_URL}/categories?slug=${CATEGORY_FILTER}`
+            )
+            const categoryData = await categoryResponse.json()
+            
+            if (categoryData.length > 0) {
+              apiUrl += `&categories=${categoryData[0].id}`
+            } else {
+              throw new Error(`Category "${CATEGORY_FILTER}" not found`)
+            }
+          }
+        }
+        
+        const response = await fetch(apiUrl)
         
         if (!response.ok) {
           throw new Error(`WordPress API error: ${response.status}`)
@@ -80,7 +109,16 @@ export default function Home() {
           marginBottom: '2rem',
           border: '1px solid #e9ecef'
         }}>
-          <strong>API Endpoint:</strong> {WORDPRESS_API_URL}
+          <div style={{ marginBottom: '0.5rem' }}>
+            <strong>API Endpoint:</strong> {WORDPRESS_API_URL}
+          </div>
+          <div>
+            <strong>Filtering by Category:</strong>{' '}
+            {CATEGORY_FILTER 
+              ? <span style={{ color: '#667eea', fontWeight: '600' }}>"{CATEGORY_FILTER}"</span>
+              : <span style={{ color: '#999' }}>All posts</span>
+            }
+          </div>
         </div>
 
         {loading && (
@@ -112,7 +150,7 @@ export default function Home() {
               marginBottom: '1.5rem',
               color: '#333'
             }}>
-              Latest Posts from WordPress:
+              Latest Posts from WordPress: This is from Paribesh the Neupane. 
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {posts.map((post) => (
