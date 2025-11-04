@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Paribesh - ish-vara.com',
-  description: 'Paribesh subdomain powered by Next.js and WordPress',
+  title: 'Paribesh Neupane - Full Stack Developer',
+  description: 'Personal website showcasing projects, thoughts, and professional journey of Paribesh Neupane',
 }
 
 export default function RootLayout({
